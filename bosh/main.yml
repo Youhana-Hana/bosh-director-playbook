@@ -1,0 +1,36 @@
+---
+# ansible-playbook -i ./inventory ./main.yml -e ansible_ssh_user=user -e ansible_ssh_pass=PASSWORD -e ansible_ssh_port=22 -e vsphere_user=VSPHERE_USER -e vsphere_password=VSPHERE-PASSWORD -e environment_name=ENVIRONMENT_NAME -e git_token=GIT_TOKEN -e git_url=GIT_URL -e director_ip=DIRECTOR_IP 
+
+
+- hosts: PCFAutomation
+
+  tasks:
+    - name: test connection
+      ping:
+
+    - name: debug
+      debug: var=inventory_hostname
+
+    - include_tasks: ../roles/common/tasks/clone_upload.yml item={{item}}
+      with_items:
+        - {name: 'bosh-deployment', url: 'https://github.com/cloudfoundry/bosh-deployment', dest: '/tmp/bosh-deployment', target: '~/git-repos/bosh-deployment'}
+
+    - include_tasks: ../roles/common/tasks/download_upload.yml item={{item}}
+      with_items:
+        - {name: 'BOSH Release', url: 'https://bosh.io/d/github.com/cloudfoundry/bosh?v=263.2.0', dest: 'bosh-release.tgz'}
+        - {name: 'BOSH vSphere CPI Release', url: 'https://bosh.io/d/github.com/cloudfoundry-incubator/bosh-vsphere-cpi-release?v=44', dest: 'bosh-release-vsphere-cpi.tgz'}
+        - {name: 'Minio Releases', url: 'https://bosh.io/d/github.com/minio/minio-boshrelease', dest: 'bosh-release-minio.tgz'}
+        - {name: 'Postgres Release', url: 'https://bosh.io/d/github.com/cloudfoundry/postgres-release?v=24', dest: 'bosh-release-postgres.tgz'}
+        - {name: 'Garden Run-C Release', url: 'https://bosh.io/d/github.com/cloudfoundry/garden-runc-release?v=1.11.1', dest: 'bosh-release-garden-runc.tgz'}
+        - {name: 'Concourse Release', url: 'https://bosh.io/d/github.com/concourse/concourse?v=3.8.0', dest: 'bosh-release-concourse.tgz'}
+        - {name: 'BOSH Stemcell', url: 'https://bosh.io/d/stemcells/bosh-vsphere-esxi-ubuntu-trusty-go_agent?v=3445.7', dest: 'bosh-stemcell-bosh.tgz'}
+        - {name: 'Concourse Stemcell', url: 'https://s3.amazonaws.com/bosh-core-stemcells/vsphere/bosh-stemcell-3445.11-vsphere-esxi-ubuntu-trusty-go_agent.tgz', dest: 'bosh-stemcell-concourse.tgz'}
+
+    - name: clone bosh-director-playbook repo
+      git:
+        repo: https://{{ git_token }}@{{ git_url}} 
+        dest: ~/git-repos/bosh-director-playbook
+        force: yes
+        
+    - name: execute bosh automation setup script
+      shell: ENVIRONMENT_NAME={{environment_name}}  VSPHERE_USER={{vsphere_user}} VSPHERE_PASSWORD={{vsphere_password}} BOSH_DIRECTOR_IP={{director_ip}} ~/git-repos/bosh-director-playboo/setup >> ~/setup.log

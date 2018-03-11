@@ -1,0 +1,63 @@
+#!/bin/bash
+set -eu
+
+echo
+echo "This will deploy the $ENVIRONMENT_NAME PCF Automation environment."
+
+cd ~/git-repos
+
+
+echo "Deploying BOSH director..."
+bosh create-env bosh-deployment/manifest.yml \
+    --state=bosh-director-playbook/$ENVIRONMENT_PATH/bosh/state.json \
+    --vars-store=bosh-director-playbook/$ENVIRONMENT_PATH/bosh/creds.yml \
+    -v director_name=bosh \
+    -v vcenter_user="$VSPHERE_USER" \
+    -v vcenter_password="$VSPHERE_PASSWORD" \
+    --vars-file=bosh-director-playbook/$ENVIRONMENT_PATH/bosh/environment-vars.yml \
+    -o bosh-deployment/vsphere/cpi.yml \
+    -o bosh-deployment/vsphere/resource-pool.yml \
+
+echo
+echo "Testing director connection..."
+bosh alias-env $ENVIRONMENT_NAME -e $BOSH_DIRECTOR_IP --ca-cert <(bosh int bosh-director-playbook/$ENVIRONMENT_PATH/bosh/creds.yml --path /director_ssl/ca)
+
+echo
+echo "Setting director credentials..."
+export BOSH_CLIENT=admin
+export BOSH_CLIENT_SECRET=`bosh int bosh-director-playbook/$ENVIRONMENT_PATH/bosh/creds.yml --path /admin_password`
+
+echo
+echo "Testing director connection..."
+bosh -e $ENVIRONMENT_NAME env
+
+echo
+echo "Update cloud config..."
+bosh -e $ENVIRONMENT_NAME update-cloud-config bosh-director-playbook/$ENVIRONMENT_PATH/bosh/cloud-config.yml -n
+
+echo
+echo "Uploading releases..."
+bosh -e $ENVIRONMENT_NAME upload-release bosh-deployment/bosh-releases/bosh-release-concourse.tgz
+bosh -e $ENVIRONMENT_NAME upload-release bosh-deployment/bosh-releases/bosh-release-garden-runc.tgz
+bosh -e $ENVIRONMENT_NAME upload-release bosh-deployment/bosh-releases/bosh-release-postgres.tgz
+
+echo
+echo "Uploading stemcells..."
+bosh -e $ENVIRONMENT_NAME upload-stemcell bosh-deployment/bosh-releases/bosh-stemcell-concourse.tgz # Stemcell used by Concourse CI
+bosh -e $ENVIRONMENT_NAME upload-stemcell bosh-deployment/bosh-releases/bosh-stemcell-bosh.tgz
+
+
+echo "checking any changes for state and creds to repo..."
+cd bosh-director-playbook
+
+if git diff-index --quiet HEAD --; then
+    echo "No changes to commit"
+else
+    echo "Commiting state and creds to repo..."
+    git add $ENVIRONMENT_PATH/bosh/state.json $ENVIRONMENT_PATH/bosh/creds.yml
+    git commit -m "Updating repo with current state.json and creds.yml"
+    git push
+fi
+
+echo "Success."
+

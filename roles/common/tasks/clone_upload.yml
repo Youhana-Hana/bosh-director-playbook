@@ -1,0 +1,13 @@
+---
+- name: download {{item.name}} repo locally
+  local_action: git repo={{item.url}} dest={{item.dest}} archive={{item.dest}}.tgz
+
+- name: ensure git-repos directory  {{item.target}} exists
+  file:
+    path: "{{item.target}}"
+    state: directory
+
+- name: extract {{item.name}}
+  unarchive:
+    src: "{{ item.dest }}.tgz"
+    dest: "{{ item.target }}"

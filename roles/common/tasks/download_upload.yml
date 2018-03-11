@@ -1,0 +1,8 @@
+---
+- name: download {{item.name}} locally
+  local_action: get_url url={{item.url}} dest=/tmp/{{item.dest}}
+
+- name: copy {{item.name}}
+  copy:
+    src: /tmp/{{item.dest}}
+    dest: ~/git-repos/bosh-deployment/bosh-releases/
